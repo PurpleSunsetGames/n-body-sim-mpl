@@ -1,4 +1,4 @@
-from numba import njit, prange, jit
+from numba import njit, prange
 import numpy as np
 import matplotlib.pyplot as plt
 from time import time
@@ -10,7 +10,7 @@ plt.style.use('dark_background')
 
 
 @njit(parallel=True)
-def gravitate(g_info):
+def gravitate(g_info, vel_mult):
     masses = g_info[0]
     pos_xs = g_info[1]
     pos_ys = g_info[2]
@@ -36,8 +36,8 @@ def gravitate(g_info):
                     print(comp, particle, px, py, cx, cy, pm, cm)
             else:
                 pass
-    pos_xs += vel_xs * .02
-    pos_ys += vel_ys * .02
+    pos_xs += vel_xs * vel_mult
+    pos_ys += vel_ys * vel_mult
     g_info[0] = masses
     g_info[1] = pos_xs
     g_info[2] = pos_ys
@@ -56,7 +56,7 @@ size = 1000
 xi = np.ones((5, size))
 xi[0] = 2 * np.random.random(size) + 1
 
-rand_radius = np.random.random(size) * 5
+rand_radius = np.random.random(size) * 25
 rand_theta =  np.random.random(size) * 2 * PI
 
 xi[1] = np.cos(rand_theta) * rand_radius
@@ -90,7 +90,7 @@ value1 = 0
 while True:
     start = time()
     if value < simsteps:
-        xi = gravitate(xi)
+        xi = gravitate(xi, vel_fac)
         plot1.set_xdata(xi[1])
         plot1.set_ydata(xi[2])
     print(time() - start)
@@ -109,8 +109,9 @@ while True:
         if simsteps == 'r':
             size = int(input("Number of bodies: "))
             rand_radius = float(input("Radius for galactic generation: "))
-            vel_fac = float(input("Volcity multiplier"))
-            rand_vels = float(input("Randomized velocity multiplier: "))
+            vel_fac = float(input("Velocity multiplier: "))
+            window_range = float(input("View range: "))
+            figure, ax = plt.subplots(figsize=(window_range, window_range))
             simsteps = int(input("Steps to render:"))
             render = (input("Output frames as images? ('True' or 'False': "))
             if render == 'True':
@@ -135,8 +136,9 @@ while True:
 
             #xi[3] = (((np.random.random(size) - .5) * rand_vels) + (vel_fac*xi[2]) / 100)
             #xi[4] = (((np.random.random(size) - .5) * rand_vels) + (vel_fac*(-xi[1])) / 100)
-            xi[3] = (xi[2] / np.sqrt((xi[1]**2)+(xi[2]**2))) * np.sqrt(G_CONST*np.sqrt((xi[1]**2)+(xi[2]**2))*size)
-            xi[4] =(-xi[1] / np.sqrt((xi[1]**2)+(xi[2]**2))) * np.sqrt(G_CONST*np.sqrt((xi[1]**2)+(xi[2]**2))*size)
+            xi[3] = (xi[2] / np.sqrt((xi[1]**2)+(xi[2]**2))) * np.sqrt(G_CONST*np.sqrt((xi[1]**2)+(xi[2]**2))*size*2)
+            xi[4] =(-xi[1] / np.sqrt((xi[1]**2)+(xi[2]**2))) * np.sqrt(G_CONST*np.sqrt((xi[1]**2)+(xi[2]**2))*size*2)
         simsteps = int(simsteps)
         value = 0
+    ax.set_aspect('equal')
 
