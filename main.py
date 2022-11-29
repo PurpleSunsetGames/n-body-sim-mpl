@@ -1,3 +1,4 @@
+import moderngl.buffer
 from numba import njit, prange
 import numpy as np
 import matplotlib.pyplot as plt
@@ -8,6 +9,14 @@ G_CONST = .000006
 
 plt.style.use('dark_background')
 
+import moderngl
+import struct
+
+ctx = moderngl.create_context(standalone=True)
+program = ctx.program(
+    vertex_shader=str(open("programs/vertex_shader.glsl").read()),
+    varyings=["out_poss", "out_vels", "out_masses"]
+)
 
 @njit(parallel=True)
 def gravitate(g_info, vel_mult):
@@ -26,7 +35,7 @@ def gravitate(g_info, vel_mult):
             cm = masses[comp]
             if comp != particle:
                 try:
-                    d = np.sqrt(((px - cx) * (px - cx)) + ((py - cy) * (py - cy)))
+                    d = np.sqrt(((px - cx)**2) + ((py - cy)**2))
                     dcube = d ** 2
                     dx = (G_CONST * (cx - px) * (pm + cm)) / dcube
                     dy = (G_CONST * (cy - py) * (pm + cm)) / dcube
@@ -49,19 +58,20 @@ def gravitate(g_info, vel_mult):
 # masses, px, py, vx, vy
 xi = np.random.random((5, 1))
 start = time()
-gravitate(xi)
+gravitate(xi, 1)
 print(time() - start)
 
 size = 1000
 xi = np.ones((5, size))
+#masses
 xi[0] = 2 * np.random.random(size) + 1
 
 rand_radius = np.random.random(size) * 25
 rand_theta =  np.random.random(size) * 2 * PI
-
+#positions
 xi[1] = np.cos(rand_theta) * rand_radius
 xi[2] = np.sin(rand_theta) * rand_radius
-
+#velocities
 xi[3] = ( xi[2]) / 100
 xi[4] = (-xi[1]) / 100
 
@@ -87,10 +97,39 @@ simsteps = int(input("Steps (will render into pngs if you selected 'True'): "))
 
 value = 0
 value1 = 0
+vel_fac = 1
 while True:
     start = time()
     if value < simsteps:
-        xi = gravitate(xi, vel_fac)
+        #xi = gravitate(xi, vel_fac)
+        comp_num = 0
+        NUM_VERTICES = len(xi[1])
+        xp = xi[1]
+        yp = xi[2]
+        xv = xi[3]
+        yv = xi[4]
+        m = xi[0]
+        while comp_num < NUM_VERTICES:
+            vertices = np.dstack([xp, yp, xv, yv, m,
+                                  np.zeros(NUM_VERTICES) + xp[comp_num],
+                                  np.zeros(NUM_VERTICES) + yp[comp_num],
+                                  np.zeros(NUM_VERTICES) + xv[comp_num],
+                                  np.zeros(NUM_VERTICES) + yv[comp_num],
+                                  np.zeros(NUM_VERTICES) + m[comp_num]])
+
+            vbo = ctx.buffer(vertices.astype('f4').tobytes())
+
+            vao = ctx.vertex_array(program, vbo, "in_poss", "in_vels", "in_masses", "comp_pos", "comp_vel", "comp_mass")
+
+            vao.transform(vbo, vertices=NUM_VERTICES)
+
+            # unpacking 'number of points times number of attributes per point' floats
+            data = np.array(struct.unpack(f'{NUM_VERTICES * 10}f', vbo.read())).reshape((NUM_VERTICES * 2, 5))[:NUM_VERTICES]
+            xi[3] += np.swapaxes(data, 0, 1)[2]
+            xi[4] += np.swapaxes(data, 0, 1)[3]
+            comp_num += 1
+        xi[1] = xi[1] + xi[3] / xi[0]
+        xi[2] = xi[2] + xi[4] / xi[0]
         plot1.set_xdata(xi[1])
         plot1.set_ydata(xi[2])
     print(time() - start)
